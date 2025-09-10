@@ -7,6 +7,7 @@ Auto-detects QR codes pasted directly in terminal
 import os
 import sys
 import time
+import threading
 from datetime import datetime
 from dotenv import load_dotenv
 
@@ -30,10 +31,13 @@ except ImportError:
 class AutoDoorController:
     def __init__(self):
         self.RELAY_PIN = 17
+        self.SWITCH_PIN = 23  # Manual door switch
         self.door_open_duration = 10
+        self.switch_open_duration = 8  # Duration for manual switch
         self.running = True
         self.last_qr = ""
         self.last_time = 0
+        self.door_busy = False  # Prevent simultaneous door operations
         
         # Setup
         self._setup_gpio()
@@ -41,14 +45,18 @@ class AutoDoorController:
         
         print("🚪 Auto Door Control Started")
         print("📱 Paste QR codes - they auto-process!")
+        print("🔘 Press switch (GPIO 23) for manual door open")
         print("💡 Type 'quit' to exit\n")
     
     def _setup_gpio(self):
         if RASPBERRY_PI:
             GPIO.cleanup()
             GPIO.setmode(GPIO.BCM)
+            # Setup relay (door control)
             GPIO.setup(self.RELAY_PIN, GPIO.OUT, initial=GPIO.HIGH)
-            print("✓ GPIO ready - Door LOCKED")
+            # Setup switch (manual door open)
+            GPIO.setup(self.SWITCH_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+            print("✓ GPIO ready - Door LOCKED, Switch ready")
         else:
             print("✓ Simulation mode")
     
@@ -86,10 +94,17 @@ class AutoDoorController:
             print(f"💥 Database error: {e}")
             return False
     
-    def open_door(self):
-        """Open door for 10 seconds"""
+    def open_door(self, duration=None, source="QR"):
+        """Open door for specified duration"""
+        if self.door_busy:
+            print("⏳ Door operation in progress...")
+            return
+        
+        self.door_busy = True
+        open_time = duration or self.door_open_duration
+        
         try:
-            print(f"🔓 UNLOCKING DOOR for {self.door_open_duration} seconds...")
+            print(f"🔓 UNLOCKING DOOR for {open_time} seconds... (via {source})")
             
             # UNLOCK immediately
             if RASPBERRY_PI:
@@ -98,7 +113,7 @@ class AutoDoorController:
             print("🚪 DOOR IS OPEN!")
             
             # Countdown
-            for i in range(self.door_open_duration, 0, -1):
+            for i in range(open_time, 0, -1):
                 print(f"   ⏰ {i} seconds remaining")
                 time.sleep(1)
             
@@ -112,6 +127,8 @@ class AutoDoorController:
             print(f"💥 Door error: {e}")
             if RASPBERRY_PI:
                 GPIO.output(self.RELAY_PIN, GPIO.HIGH)
+        finally:
+            self.door_busy = False
     
     def process_qr(self, qr_input):
         """Process QR code"""
@@ -128,11 +145,37 @@ class AutoDoorController:
         
         if self.check_qr(qr_input):
             print("🟢 ACCESS GRANTED")
-            self.open_door()
+            self.open_door(source="QR Code")
         else:
             print("🔴 ACCESS DENIED\n")
         
         print("📱 Ready for next QR code...")
+    
+    def monitor_switch(self):
+        """Monitor GPIO 23 switch for manual door opening"""
+        if not RASPBERRY_PI:
+            return
+        
+        print("🔘 Switch monitor active (GPIO 23)...")
+        last_switch_time = 0
+        
+        while self.running:
+            try:
+                # Check if switch is pressed (LOW when pressed due to pull-up)
+                if GPIO.input(self.SWITCH_PIN) == GPIO.LOW:
+                    current_time = time.time()
+                    
+                    # Debounce - prevent multiple triggers
+                    if current_time - last_switch_time > 1:
+                        print("\n🔘 MANUAL SWITCH PRESSED!")
+                        self.open_door(duration=self.switch_open_duration, source="Manual Switch")
+                        last_switch_time = current_time
+                
+                time.sleep(0.1)  # Check every 100ms
+                
+            except Exception as e:
+                print(f"Switch error: {e}")
+                time.sleep(1)
     
     def auto_input_monitor(self):
         """Monitor terminal input automatically"""
@@ -163,6 +206,12 @@ class AutoDoorController:
     def run(self):
         """Main loop"""
         try:
+            # Start switch monitor in background thread
+            if RASPBERRY_PI:
+                switch_thread = threading.Thread(target=self.monitor_switch, daemon=True)
+                switch_thread.start()
+            
+            # Start input monitor
             self.auto_input_monitor()
         finally:
             self.cleanup()
