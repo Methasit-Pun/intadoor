@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 """
 Optimized Automatic Door Control System
-Auto-detects QR codes pasted directly in terminal
+Auto-detects Q            # Emergency offline codes - always work
+            if qr_code in self.EMERGENCY_CODES:
+                print(f"🔑 EMERGENCY CODE DETECTED: {qr_code}")
+                print("🚨 OFFLINE BYPASS MODE - Access granted!")
+                return Truees pasted directly in terminal
 """
 
 import os
@@ -38,6 +42,10 @@ class AutoDoorController:
         self.last_qr = ""
         self.last_time = 0
         self.door_busy = False  # Prevent simultaneous door operations
+        self.EMERGENCY_CODES = [
+            "INR012509101700000201",  # Emergency bypass code 1
+            "INR012508300900000131"   # Emergency bypass code 2
+        ]
         
         # Setup
         self._setup_gpio()
@@ -46,6 +54,7 @@ class AutoDoorController:
         print("🚪 Auto Door Control Started")
         print("📱 Paste QR codes - they auto-process!")
         print("🔘 Press switch (GPIO 23) for manual door open")
+        print("🔑 Emergency codes available for offline mode")
         print("💡 Type 'quit' to exit\n")
     
     def _setup_gpio(self):
@@ -71,28 +80,43 @@ class AutoDoorController:
         print("✓ Connected to database")
     
     def check_qr(self, qr_code):
-        """Check QR code in database"""
+        """Check QR code in database with offline emergency bypass"""
         try:
             qr_code = qr_code.strip()
             if not qr_code:
                 return False
             
-            print(f"🔍 Checking: {qr_code}")
+            # Emergency offline code - always works
+            if qr_code == self.EMERGENCY_CODE:
+                print(f"🔑 EMERGENCY CODE DETECTED: {qr_code}")
+                print("� OFFLINE BYPASS MODE - Access granted!")
+                return True
             
+            print(f"�🔍 Checking: {qr_code}")
+            
+            # Try database check
             response = self.supabase.table('reservations').select("*").eq('qr_code_url', qr_code).execute()
             
             if response.data:
-                print("✅ QR code found!")
+                print("✅ QR code found in database!")
                 if 'id' in response.data[0]:
                     print(f"   ID: {response.data[0]['id']}")
                 return True
             else:
-                print("❌ QR code NOT found")
+                print("❌ QR code NOT found in database")
                 return False
                 
         except Exception as e:
-            print(f"💥 Database error: {e}")
-            return False
+            print(f"💥 Database connection error: {e}")
+            
+            # Check if it's an emergency code during connection failure
+            if qr_code.strip() in self.EMERGENCY_CODES:
+                print(f"🔑 EMERGENCY CODE USED: {qr_code}")
+                print("🚨 OFFLINE MODE - Database unavailable, using emergency bypass!")
+                return True
+            else:
+                print("❌ Database unavailable and not emergency code")
+                return False
     
     def open_door(self, duration=None, source="QR"):
         """Open door for specified duration"""
@@ -144,8 +168,12 @@ class AutoDoorController:
         print("\n" + "="*40)
         
         if self.check_qr(qr_input):
-            print("🟢 ACCESS GRANTED")
-            self.open_door(source="QR Code")
+            if qr_input.strip() == self.EMERGENCY_CODE:
+                print("� EMERGENCY ACCESS GRANTED")
+                self.open_door(source="Emergency Code")
+            else:
+                print("�🟢 ACCESS GRANTED")
+                self.open_door(source="QR Code")
         else:
             print("🔴 ACCESS DENIED\n")
         
