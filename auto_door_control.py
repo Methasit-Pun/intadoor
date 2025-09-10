@@ -2,7 +2,13 @@
 """
 Optimized Automatic Door Control System
 Auto-detects Q            # Emergency offline codes - always work
-            if qr_code in self.EMERGENCY_CODES:
+            if qr_code in self.E        if self.check_qr(qr_input):
+            if qr_input.strip() in self.EMERGENCY_CODES:
+                print("🚨 EMERGENCY ACCESS GRANTED")
+                self.open_door(source="Emergency Code")
+            else:
+                print("🟢 ACCESS GRANTED")
+                self.open_door(source="QR Code")Y_CODES:
                 print(f"🔑 EMERGENCY CODE DETECTED: {qr_code}")
                 print("🚨 OFFLINE BYPASS MODE - Access granted!")
                 return Truees pasted directly in terminal
@@ -80,7 +86,41 @@ class AutoDoorController:
         print("✓ Connected to database")
     
     def check_qr(self, qr_code):
-        """Check QR code in database with offline emergency bypass"""
+        """Check QR code with emergency bypass and proper error handling"""
+        try:
+            qr_code = qr_code.strip()
+            if not qr_code:
+                return False
+            
+            # FIRST: Check if this is an emergency code - always works regardless of internet
+            if qr_code in self.EMERGENCY_CODES:
+                print(f"🔑 EMERGENCY CODE DETECTED: {qr_code}")
+                print("🚨 EMERGENCY BYPASS MODE - Access granted!")
+                return True
+            
+            print(f"🔍 Checking QR code in database: {qr_code}")
+            
+            # SECOND: Try database check (requires internet)
+            try:
+                response = self.supabase.table('reservations').select("*").eq('qr_code_url', qr_code).execute()
+                
+                if response.data and len(response.data) > 0:
+                    print("✅ QR code found in database!")
+                    if 'id' in response.data[0]:
+                        print(f"   🆔 Reservation ID: {response.data[0]['id']}")
+                    return True
+                else:
+                    print("❌ 404 QR code not found in database")
+                    return False
+                    
+            except Exception as db_error:
+                print(f"❌ 404 Internet connection error: {db_error}")
+                print("🌐 Database unavailable - Internet connection required for non-emergency codes")
+                return False
+                
+        except Exception as e:
+            print(f"💥 System error: {e}")
+            return False
         try:
             qr_code = qr_code.strip()
             if not qr_code:
