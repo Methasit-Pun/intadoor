@@ -11,8 +11,23 @@ import time
 import logging
 import threading
 import queue
+import select
 from datetime import datetime
 from dotenv import load_dotenv
+
+# Try to import clipboard monitoring
+try:
+    import pyperclip
+    CLIPBOARD_AVAILABLE = True
+except ImportError:
+    CLIPBOARD_AVAILABLE = False
+    print("Installing pyperclip for automatic detection...")
+    try:
+        os.system("pip install pyperclip")
+        import pyperclip
+        CLIPBOARD_AVAILABLE = True
+    except:
+        CLIPBOARD_AVAILABLE = False
 
 # Load environment variables
 load_dotenv()
@@ -50,7 +65,7 @@ class AutomaticDoorController:
     def __init__(self):
         # GPIO Configuration
         self.RELAY_PIN = 17  # GPIO pin for relay control (BCM numbering)
-        self.door_open_duration = int(os.getenv('DOOR_OPEN_DURATION', 5))
+        self.door_open_duration = 10  # 10 seconds to keep door unlocked
         
         # Supabase configuration
         self.supabase_url = os.getenv('SUPABASE_URL')
@@ -63,6 +78,7 @@ class AutomaticDoorController:
         self.last_processed_code = ""
         self.last_process_time = 0
         self.min_interval = 2  # Minimum seconds between processing same code
+        self.last_clipboard_content = ""  # For clipboard monitoring
         
         # Running flag
         self.running = True
@@ -73,10 +89,12 @@ class AutomaticDoorController:
         
         logger.info("Automatic door control system initialized")
         print("=== Automatic Door Control System Started ===")
-        print("🔄 Auto-processing mode: QR codes will be processed immediately")
-        print("📱 Paste QR codes - they will auto-submit when text length > 0")
+        print("🔄 Auto-processing mode: QR codes detected automatically")
+        if CLIPBOARD_AVAILABLE:
+            print("📋 Clipboard monitoring: Copy QR codes - they auto-process!")
+        print("⌨️  Keyboard input: Type QR codes - they auto-process when you finish typing")
         print("💡 Type 'quit' to exit")
-        print("="*55)
+        print("="*65)
     
     def _setup_gpio(self):
         """Initialize GPIO settings for relay control"""
@@ -148,35 +166,38 @@ class AutomaticDoorController:
             return False
     
     def open_door(self):
-        """Open the door by activating the relay"""
+        """Unlock the door immediately for 10 seconds, then lock again"""
         try:
-            print(f"🚪 OPENING DOOR for {self.door_open_duration} seconds...")
+            print(f"� UNLOCKING DOOR immediately for {self.door_open_duration} seconds...")
             
+            # UNLOCK the door immediately
             if RASPBERRY_PI:
-                GPIO.output(self.RELAY_PIN, GPIO.HIGH)  # Activate relay (open door)
-                logger.info("Door relay activated")
+                GPIO.output(self.RELAY_PIN, GPIO.LOW)  # Deactivate relay (UNLOCK door)
+                logger.info("Door relay deactivated - DOOR UNLOCKED")
             else:
-                print("   [SIMULATION] Relay activated - door would open")
+                print("   [SIMULATION] Relay deactivated - door UNLOCKED")
             
-            # Countdown timer
+            print("🚪 DOOR IS NOW OPEN!")
+            
+            # Countdown timer while door is UNLOCKED
             for i in range(self.door_open_duration, 0, -1):
-                print(f"   🕐 Door open... {i} seconds remaining")
+                print(f"   � Door UNLOCKED... {i} seconds remaining")
                 time.sleep(1)
             
-            # Close door
+            # LOCK door again
             if RASPBERRY_PI:
-                GPIO.output(self.RELAY_PIN, GPIO.LOW)  # Deactivate relay (close door)
-                logger.info("Door relay deactivated")
+                GPIO.output(self.RELAY_PIN, GPIO.HIGH)  # Activate relay (LOCK door)
+                logger.info("Door relay activated - DOOR LOCKED")
             else:
-                print("   [SIMULATION] Relay deactivated - door would close")
+                print("   [SIMULATION] Relay activated - door LOCKED")
             
-            print("🔒 Door closed")
+            print("🔒 Door is now LOCKED again")
             
         except Exception as e:
             logger.error(f"Error controlling door: {e}")
-            # Ensure door is closed in case of error
+            # Ensure door is LOCKED in case of error
             if RASPBERRY_PI:
-                GPIO.output(self.RELAY_PIN, GPIO.LOW)
+                GPIO.output(self.RELAY_PIN, GPIO.HIGH)
             print(f"💥 ERROR: Door control failed - {e}")
     
     def log_access_attempt(self, qr_code, success):
@@ -224,36 +245,95 @@ class AutomaticDoorController:
         print("="*50)
         print("📝 Ready for next QR code...")
     
-    def auto_input_monitor(self):
-        """
-        Monitor for automatic input processing
-        This simulates automatic QR code detection
-        """
-        print("🎯 Auto-input monitor started...")
+    def monitor_clipboard(self):
+        """Monitor clipboard for new QR code content"""
+        if not CLIPBOARD_AVAILABLE:
+            return
+        
+        print("📋 Clipboard monitoring started...")
         
         while self.running:
             try:
-                # Get input from user
-                user_input = input("").strip()
+                current_clipboard = pyperclip.paste()
                 
-                # Check if user wants to quit
-                if user_input.lower() in ['quit', 'exit', 'q']:
-                    print("🛑 Shutting down automatic door control system...")
-                    self.running = False
-                    break
+                # Check if clipboard content has changed
+                if (current_clipboard != self.last_clipboard_content and 
+                    current_clipboard.strip() and 
+                    len(current_clipboard.strip()) >= 3):
+                    
+                    cleaned_content = current_clipboard.strip()
+                    
+                    # Avoid processing obvious non-QR content
+                    if not any(skip in cleaned_content.lower() for skip in ['password', 'username', 'email']):
+                        print(f"\n📥 Clipboard QR detected: {cleaned_content}")
+                        self.input_queue.put(cleaned_content)
+                    
+                    self.last_clipboard_content = current_clipboard
                 
-                # Auto-process if text length > 0
-                if len(user_input) > 0:
-                    print(f"📥 Auto-detected input: {user_input}")
-                    print("⚡ Auto-processing...")
-                    self.input_queue.put(user_input)
+                time.sleep(0.5)  # Check clipboard every 500ms
+                
+            except Exception as e:
+                logger.error(f"Error monitoring clipboard: {e}")
+                time.sleep(1)
+    
+    def auto_keyboard_monitor(self):
+        """
+        Monitor keyboard input with automatic processing
+        """
+        print("⌨️  Keyboard input monitor started...")
+        print("💡 Type QR codes - they will process automatically when you pause typing")
+        
+        current_input = ""
+        last_input_time = time.time()
+        
+        while self.running:
+            try:
+                # Non-blocking input check (Windows compatible)
+                if sys.platform == "win32":
+                    import msvcrt
+                    while msvcrt.kbhit():
+                        char = msvcrt.getch().decode('utf-8', errors='ignore')
+                        if char == '\r' or char == '\n':  # Enter key
+                            if current_input.strip():
+                                if current_input.strip().lower() in ['quit', 'exit', 'q']:
+                                    self.running = False
+                                    return
+                                print(f"\n⚡ Auto-processing: {current_input.strip()}")
+                                self.input_queue.put(current_input.strip())
+                                current_input = ""
+                        elif char == '\b':  # Backspace
+                            current_input = current_input[:-1]
+                        elif char.isprintable():
+                            current_input += char
+                            last_input_time = time.time()
+                            print(f"\r🔤 Typing: {current_input}", end="", flush=True)
+                
+                # Auto-process if user stops typing for 2 seconds
+                if (current_input.strip() and 
+                    time.time() - last_input_time > 2 and 
+                    len(current_input.strip()) > 3):
+                    
+                    print(f"\n⚡ Auto-processing (timeout): {current_input.strip()}")
+                    self.input_queue.put(current_input.strip())
+                    current_input = ""
+                
+                time.sleep(0.1)
                 
             except KeyboardInterrupt:
-                print("\n🛑 Shutting down system...")
                 self.running = False
                 break
             except Exception as e:
-                logger.error(f"Error in input monitor: {e}")
+                logger.error(f"Error in keyboard monitor: {e}")
+                # Fallback to simple input
+                try:
+                    user_input = input("\nEnter QR code: ").strip()
+                    if user_input.lower() in ['quit', 'exit', 'q']:
+                        self.running = False
+                        break
+                    if user_input:
+                        self.input_queue.put(user_input)
+                except:
+                    break
     
     def input_processor(self):
         """Process queued inputs automatically"""
@@ -277,8 +357,13 @@ class AutomaticDoorController:
             processor_thread = threading.Thread(target=self.input_processor, daemon=True)
             processor_thread.start()
             
-            # Start auto input monitor
-            self.auto_input_monitor()
+            # Start clipboard monitor if available
+            if CLIPBOARD_AVAILABLE:
+                clipboard_thread = threading.Thread(target=self.monitor_clipboard, daemon=True)
+                clipboard_thread.start()
+            
+            # Start keyboard monitor
+            self.auto_keyboard_monitor()
         
         finally:
             self.cleanup()
@@ -288,8 +373,10 @@ class AutomaticDoorController:
         self.running = False
         try:
             if RASPBERRY_PI:
+                # Ensure door is LOCKED before cleanup
+                GPIO.output(self.RELAY_PIN, GPIO.HIGH)  # Lock door
                 GPIO.cleanup()
-                logger.info("GPIO cleanup completed")
+                logger.info("GPIO cleanup completed - Door secured and locked")
             print("✅ System shutdown complete")
         except Exception as e:
             logger.error(f"Error during cleanup: {e}")
