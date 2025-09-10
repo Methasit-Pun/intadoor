@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 class DoorController:
     def __init__(self):
         # GPIO Configuration
-        self.RELAY_PIN = 11  # GPIO pin for relay control
+        self.RELAY_PIN = 17  # GPIO pin for relay control (BCM numbering)
         self.door_open_duration = 5  # seconds to keep door open
         
         # Supabase configuration
@@ -54,10 +54,10 @@ class DoorController:
     def _setup_gpio(self):
         """Initialize GPIO settings for relay control"""
         try:
-            GPIO.setmode(GPIO.BOARD)  # Use physical pin numbering
-            GPIO.setup(self.RELAY_PIN, GPIO.OUT)
-            GPIO.output(self.RELAY_PIN, GPIO.LOW)  # Door closed (relay off)
-            logger.info(f"GPIO initialized - Relay pin {self.RELAY_PIN} set to LOW (door closed)")
+            GPIO.cleanup()  # Clean up any previous GPIO usage
+            GPIO.setmode(GPIO.BCM)  # Use BCM pin numbering (GPIO17)
+            GPIO.setup(self.RELAY_PIN, GPIO.OUT, initial=GPIO.HIGH)  # Door locked (relay ON)
+            logger.info(f"GPIO initialized - Relay pin {self.RELAY_PIN} set to HIGH (door locked)")
         except Exception as e:
             logger.error(f"Failed to setup GPIO: {e}")
             raise
@@ -111,22 +111,22 @@ class DoorController:
             return False
     
     def open_door(self):
-        """Open the door by activating the relay"""
+        """Open the door by deactivating the relay (unlock)"""
         try:
-            logger.info("Opening door...")
-            GPIO.output(self.RELAY_PIN, GPIO.HIGH)  # Activate relay (open door)
+            logger.info("Unlocking door...")
+            GPIO.output(self.RELAY_PIN, GPIO.LOW)  # Deactivate relay (unlock door)
             
-            # Keep door open for specified duration
+            # Keep door unlocked for specified duration
             time.sleep(self.door_open_duration)
             
-            # Close door
-            GPIO.output(self.RELAY_PIN, GPIO.LOW)  # Deactivate relay (close door)
-            logger.info("Door closed")
+            # Lock door again
+            GPIO.output(self.RELAY_PIN, GPIO.HIGH)  # Activate relay (lock door)
+            logger.info("Door locked again")
             
         except Exception as e:
             logger.error(f"Error controlling door: {e}")
-            # Ensure door is closed in case of error
-            GPIO.output(self.RELAY_PIN, GPIO.LOW)
+            # Ensure door is locked in case of error
+            GPIO.output(self.RELAY_PIN, GPIO.HIGH)
     
     def process_input(self, text_input):
         """
@@ -242,8 +242,10 @@ class DoorController:
     def cleanup(self):
         """Clean up GPIO and other resources"""
         try:
+            # Ensure door is locked before cleanup
+            GPIO.output(self.RELAY_PIN, GPIO.HIGH)  # Lock door
             GPIO.cleanup()
-            logger.info("GPIO cleanup completed")
+            logger.info("GPIO cleanup completed - Door secured")
         except Exception as e:
             logger.error(f"Error during cleanup: {e}")
 

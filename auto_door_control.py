@@ -49,7 +49,7 @@ except ImportError:
 class AutomaticDoorController:
     def __init__(self):
         # GPIO Configuration
-        self.RELAY_PIN = 11  # GPIO pin for relay control
+        self.RELAY_PIN = 17  # GPIO pin for relay control (BCM numbering)
         self.door_open_duration = int(os.getenv('DOOR_OPEN_DURATION', 5))
         
         # Supabase configuration
@@ -82,10 +82,10 @@ class AutomaticDoorController:
         """Initialize GPIO settings for relay control"""
         if RASPBERRY_PI:
             try:
-                GPIO.setmode(GPIO.BOARD)  # Use physical pin numbering
-                GPIO.setup(self.RELAY_PIN, GPIO.OUT)
-                GPIO.output(self.RELAY_PIN, GPIO.LOW)  # Door closed (relay off)
-                logger.info(f"GPIO initialized - Relay pin {self.RELAY_PIN} set to LOW (door closed)")
+                GPIO.cleanup()  # Clean up any previous GPIO usage
+                GPIO.setmode(GPIO.BCM)  # Use BCM pin numbering (GPIO17)
+                GPIO.setup(self.RELAY_PIN, GPIO.OUT, initial=GPIO.HIGH)  # Door locked (relay ON)
+                logger.info(f"GPIO initialized - Relay pin {self.RELAY_PIN} set to HIGH (door locked)")
             except Exception as e:
                 logger.error(f"Failed to setup GPIO: {e}")
                 raise

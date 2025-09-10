@@ -43,9 +43,10 @@ CREATE TABLE access_logs (
 
 ## ⚡ Hardware
 
-- **GPIO Pin 11** → Relay signal
+- **GPIO Pin 17** → Relay signal (BCM numbering)
 - **5V & GND** → Relay power
-- **Relay NO** → Door lock (normally closed)
+- **Relay NO** → Door lock (normally locked system)
+- **Logic**: GPIO HIGH = Door LOCKED, GPIO LOW = Door UNLOCKED
 
 ## 🎯 How It Works
 

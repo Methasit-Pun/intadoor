@@ -46,7 +46,7 @@ except ImportError:
 class SimpleDoorController:
     def __init__(self):
         # GPIO Configuration
-        self.RELAY_PIN = 11  # GPIO pin for relay control
+        self.RELAY_PIN = 17  # GPIO pin for relay control (BCM numbering)
         self.door_open_duration = int(os.getenv('DOOR_OPEN_DURATION', 5))
         
         # Supabase configuration
@@ -69,10 +69,10 @@ class SimpleDoorController:
         """Initialize GPIO settings for relay control"""
         if RASPBERRY_PI:
             try:
-                GPIO.setmode(GPIO.BOARD)  # Use physical pin numbering
-                GPIO.setup(self.RELAY_PIN, GPIO.OUT)
-                GPIO.output(self.RELAY_PIN, GPIO.LOW)  # Door closed (relay off)
-                logger.info(f"GPIO initialized - Relay pin {self.RELAY_PIN} set to LOW (door closed)")
+                GPIO.cleanup()  # Clean up any previous GPIO usage
+                GPIO.setmode(GPIO.BCM)  # Use BCM pin numbering (GPIO17)
+                GPIO.setup(self.RELAY_PIN, GPIO.OUT, initial=GPIO.HIGH)  # Door locked (relay ON)
+                logger.info(f"GPIO initialized - Relay pin {self.RELAY_PIN} set to HIGH (door locked)")
             except Exception as e:
                 logger.error(f"Failed to setup GPIO: {e}")
                 raise
@@ -136,35 +136,35 @@ class SimpleDoorController:
             return False
     
     def open_door(self):
-        """Open the door by activating the relay"""
+        """Open the door by deactivating the relay (unlock)"""
         try:
-            print(f"🚪 OPENING DOOR for {self.door_open_duration} seconds...")
+            print(f"� UNLOCKING DOOR for {self.door_open_duration} seconds...")
             
             if RASPBERRY_PI:
-                GPIO.output(self.RELAY_PIN, GPIO.HIGH)  # Activate relay (open door)
-                logger.info("Door relay activated")
+                GPIO.output(self.RELAY_PIN, GPIO.LOW)  # Deactivate relay (unlock door)
+                logger.info("Door relay deactivated - door unlocked")
             else:
-                print("  [SIMULATION] Relay activated - door would open")
+                print("  [SIMULATION] Relay deactivated - door would unlock")
             
             # Countdown timer
             for i in range(self.door_open_duration, 0, -1):
-                print(f"  Door open... {i} seconds remaining")
+                print(f"  Door unlocked... {i} seconds remaining")
                 time.sleep(1)
             
-            # Close door
+            # Lock door again
             if RASPBERRY_PI:
-                GPIO.output(self.RELAY_PIN, GPIO.LOW)  # Deactivate relay (close door)
-                logger.info("Door relay deactivated")
+                GPIO.output(self.RELAY_PIN, GPIO.HIGH)  # Activate relay (lock door)
+                logger.info("Door relay activated - door locked")
             else:
-                print("  [SIMULATION] Relay deactivated - door would close")
+                print("  [SIMULATION] Relay activated - door would lock")
             
-            print("🔒 Door closed")
+            print("🔒 Door locked")
             
         except Exception as e:
             logger.error(f"Error controlling door: {e}")
-            # Ensure door is closed in case of error
+            # Ensure door is locked in case of error
             if RASPBERRY_PI:
-                GPIO.output(self.RELAY_PIN, GPIO.LOW)
+                GPIO.output(self.RELAY_PIN, GPIO.HIGH)
             print(f"ERROR: Door control failed - {e}")
     
     def log_access_attempt(self, qr_code, success):
@@ -231,8 +231,10 @@ class SimpleDoorController:
         """Clean up resources"""
         try:
             if RASPBERRY_PI:
+                # Ensure door is locked before cleanup
+                GPIO.output(self.RELAY_PIN, GPIO.HIGH)  # Lock door
                 GPIO.cleanup()
-                logger.info("GPIO cleanup completed")
+                logger.info("GPIO cleanup completed - Door secured")
             print("System shutdown complete")
         except Exception as e:
             logger.error(f"Error during cleanup: {e}")
