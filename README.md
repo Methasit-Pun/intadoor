@@ -4,6 +4,15 @@ Automatic door control using QR codes and Supabase database verification.
 
 ## 🚀 Quick Start
 
+cd ~/Desktop/intadoor
+python3 -m venv venv
+source venv/bin/activate
+
+python3 cdc.py
+
+
+
+
 1. **Install & Setup**
    ```bash
    pip install supabase python-dotenv pyperclip
