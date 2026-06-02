@@ -1,0 +1,16 @@
+# Install venv if missing
+sudo apt update
+sudo apt install python3-venv -y
+
+# Create and activate a venv in your project
+cd ~/Desktop/intadoor
+python3 -m venv venv
+source venv/bin/activate
+
+# Now install Supabase
+pip install supabase
+
+python3 cdc.py
+
+
+INR012510151800000331

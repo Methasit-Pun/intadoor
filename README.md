@@ -1,108 +1,41 @@
-# 🚪 Raspberry Pi Door Control System
+# IntaDoor v2
 
-Automatic door control using QR codes and Supabase database verification.
+Raspberry Pi Door Control System with Web Interface and Local Authorization.
 
-## 🚀 Quick Start
+## Quick Start (Local)
 
-cd ~/Desktop/intadoor
-python3 -m venv venv
-source venv/bin/activate
-
-python3 cdc.py
-
-
-
-
-1. **Install & Setup**
+1. **Install Dependencies**:
    ```bash
-   pip install supabase python-dotenv pyperclip
-   cp .env.example .env
-   # Edit .env with your Supabase credentials
+   pip install flask python-dotenv supabase
+   ```
+2. **Sync to Pi**:
+   ```bash
+   ./sync-up.sh
    ```
 
-2. **Run System**
+## Installation (On Raspberry Pi)
+
+1. **Navigate to the directory**:
    ```bash
-   python3 cdc.py    # Automatic clipboard monitoring
-   python3 simple_door_control.py       # Manual input mode
+   cd ~/Desktop/intadoor
+   ```
+2. **Install as Service**:
+   ```bash
+   chmod +x install_service.sh
+   ./install_service.sh
    ```
 
-3. **Use**: Copy/paste QR codes - they process automatically!
+## Usage
 
-## 📋 Database Setup (Supabase)
+- **Web Interface**: Open `http://<pi-ip-address>:9999`
+- **Features**: 
+  - Gigantic **OPEN DOOR** button (timed).
+  - **Manual Stay Open** toggle.
+  - **Simulate QR Scan** field for non-keyboard input.
+- **Local Bypass**: The code `INR012603301800000871` is hardcoded to work offline.
 
-**reservations table:**
-```sql
-CREATE TABLE reservations (
-    id SERIAL PRIMARY KEY,
-    qr_code_url VARCHAR(500) UNIQUE NOT NULL,
-    guest_name VARCHAR(255),
-    created_at TIMESTAMP DEFAULT NOW()
-);
-```
+## Development Scripts
 
-**access_logs table:**
-```sql
-CREATE TABLE access_logs (
-    id SERIAL PRIMARY KEY,
-    qr_code_url VARCHAR(500) NOT NULL,
-    success BOOLEAN NOT NULL,
-    timestamp TIMESTAMP DEFAULT NOW()
-);
-```
-
-## ⚡ Hardware
-
-- **GPIO Pin 17** → Relay signal (BCM numbering)
-- **5V & GND** → Relay power
-- **Relay NO** → Door lock (normally locked system)
-- **Logic**: GPIO HIGH = Door LOCKED, GPIO LOW = Door UNLOCKED
-
-## 🎯 How It Works
-
-1. **QR Detection** → Clipboard monitoring or manual input
-2. **Database Check** → Query `reservations.qr_code_url`
-3. **Door Action** → Open 5 seconds if QR found
-4. **Logging** → Record all attempts
-
-## 📁 Files
-
-| File | Purpose |
-|------|---------|
-| `cdc.py` | 🔥 **Auto clipboard monitoring** |
-| `simple_door_control.py` | Manual input mode |
-| `auto_door_control.py` | Auto-process typed input |
-| `.env` | Supabase credentials |
-
-## 🛠️ Configuration
-
-Edit `.env`:
-```bash
-SUPABASE_URL=your_project_url
-SUPABASE_ANON_KEY=your_anon_key
-SUPABASE_TABLE=reservations
-DOOR_OPEN_DURATION=5
-```
-
-## 🔧 Troubleshooting
-
-- **GPIO errors**: Run with `sudo`
-- **Network issues**: Check Supabase credentials
-- **No table**: Create database tables above
-- **Logs**: Check `door_system.log`
-
-## 💡 Usage Examples
-
-**Automatic Mode** (Recommended):
-```bash
-python3 clipboard_door_control.py
-# Just copy QR codes - they auto-process!
-```
-
-**Manual Mode**:
-```bash
-python3 simple_door_control.py
-# Paste QR code: [enter QR here]
-```
-
----
-
+- `sync-up.sh`: Push local changes to Pi.
+- `sync-down.sh`: Pull remote changes from Pi.
+- `cdc_v2.py`: Main application logic.

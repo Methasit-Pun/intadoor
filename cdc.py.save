@@ -1,12 +1,29 @@
 #!/usr/bin/env python3
+<<<<<<< HEAD
 import os, time, sys
 import RPi.GPIO as GPIO
 from supabase import create_client
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
+=======
+"""
+Simplified Raspberry Pi Door Control (NO relay)
+- Reads QR code (text input)
+- Verifies via Supabase
+- Controls relay accordingly
+"""
+
+import os
+import time
+import RPi.GPIO as GPIO
+from supabase import create_client
+from dotenv import load_dotenv
+from datetime import datetime
+>>>>>>> 3c0bded (feat: cdc.py)
 
 load_dotenv()
 
+<<<<<<< HEAD
 # ── Hardware ──────────────────────────────────────────────────────────────────
 RELAY_PIN          = 17
 DOOR_OPEN_DURATION = 6          # seconds
@@ -31,7 +48,8 @@ RECONNECT_INTERVAL  = 3600      # seconds between Supabase client refreshes
 
 # Use a set for O(1) membership test
 EMERGENCY_CODES = {
-    "INR012603301800000871"
+    "INR012509101700000201",
+    "INR012508300900000131",
 }
 
 # ── Startup validation ────────────────────────────────────────────────────────
@@ -189,12 +207,71 @@ try:
             time.sleep(2)
             continue
 
+=======
+# === CONFIG ===
+RELAY_PIN = 17
+DOOR_OPEN_DURATION = 6 # seconds
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_ANON_KEY")
+TABLE_NAME = os.getenv("SUPABASE_TABLE", "reservations")
+ACCESS_LOG_TABLE = "access_logs"
+QR_COLUMN = "qr_code_url"
+EMERGENCY_CODES = [
+    "INR012509101700000201",  # Emergency bypass code 1
+    "INR012508300900000131"   # Emergency bypass code 2
+]
+
+# === SETUP ===
+GPIO.setwarnings(False)
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(RELAY_PIN, GPIO.OUT, initial=GPIO.LOW)  # LOW = locked (NO relay)
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+print("🚪 Door control system (NO relay) started.\nScan QR code to test.\n")
+
+# === FUNCTIONS ===
+def open_door():
+    """Unlocks the door for a few seconds"""
+    print("🔓 Door unlocked")
+    GPIO.output(RELAY_PIN, GPIO.HIGH)
+    time.sleep(DOOR_OPEN_DURATION)
+    GPIO.output(RELAY_PIN, GPIO.LOW)
+    print("🔒 Door locked again")
+
+def check_code(code):
+    """Check Supabase for authorized QR code"""
+    try:
+        res = supabase.table(TABLE_NAME).select("*").eq(QR_COLUMN, code.strip()).execute()
+        return len(res.data) > 0
+    except Exception as e:
+        print(f"❌ Database error: {e}")
+        return False
+
+def log_access(code, success):
+    """Log access attempt to Supabase"""
+    try:
+        supabase.table(ACCESS_LOG_TABLE).insert({
+            "qr_code_url": code,
+            "timestamp": datetime.now().isoformat(),
+            "success": success,
+            "device": os.getenv("DEVICE_NAME", "raspberry_pi_door"),
+            "access_type": "door_entry"
+        }).execute()
+    except Exception as e:
+        print(f"⚠️ Failed to log access: {e}")
+
+# === MAIN LOOP ===
+try:
+    while True:
+        code = input("Scan QR code (or type 'quit' to exit): ").strip()
+>>>>>>> 3c0bded (feat: cdc.py)
         if code.lower() == "quit":
             break
 
         if not code:
+<<<<<<< HEAD
             print("⚠️ Empty input, try again.", flush=True)
-            continue
+            contine
 
         print("🔍 Checking code...", flush=True)
         authorized = code in EMERGENCY_CODES or check_code(code)
@@ -212,9 +289,17 @@ try:
             last_reconnect = time.time()
 
 except KeyboardInterrupt:
-    print("\n🛑 System stopped by user", flush=True)
+    print("\n🛑 Sysem stopped by user", flush=True)
 
 finally:
-    GPIO.output(RELAY_PIN, GPIO.LOW)
-    GPIO.cleanup()
-    print("GPIO cleaned up. Door locked.")
+    GPIO.output(RELA      if code in EMERGENCY_CODES or check_code(code):
+            print("✅ Access granted")
+            open_door()
+            log_access(code, True)
+        else:
+            print("❌ Access denied")
+            log_access(code, False)
+
+except KeyboardInterrupt:
+   print("\n🛑 System stopped by user")
+fin

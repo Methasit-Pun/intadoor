@@ -1,0 +1,14 @@
+[Unit]
+Description=Door Control System
+After=network.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/raspberry/Desktop/intadoor
+ExecStart=/usr/bin/python3 /home/raspberry/Desktop/intadoor/door_control.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

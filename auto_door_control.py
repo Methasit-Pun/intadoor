@@ -31,7 +31,7 @@ except ImportError:
 class AutoDoorController:
     def __init__(self):
         self.RELAY_PIN = 17
-        self.SWITCH_PIN = 23  # Manual door switch
+        #self.SWITCH_PIN = 23  # Manual door switch
         self.door_open_duration = 10
         self.switch_open_duration = 8  # Duration for manual switch
         self.running = True
@@ -60,7 +60,7 @@ class AutoDoorController:
             # Setup relay (door control)
             GPIO.setup(self.RELAY_PIN, GPIO.OUT, initial=GPIO.HIGH)
             # Setup switch (manual door open)
-            GPIO.setup(self.SWITCH_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+            #GPIO.setup(self.SWITCH_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
             print("✓ GPIO ready - Door LOCKED, Switch ready")
         else:
             print("✓ Simulation mode")
@@ -131,9 +131,10 @@ class AutoDoorController:
             print("🚪 DOOR IS OPEN!")
             
             # Countdown
-            for i in range(open_time, 0, -1):
+       
+            for i in range(1, 0, -1):
                 print(f"   ⏰ {i} seconds remaining")
-                time.sleep(1)
+                time.sleep(1) 
             
             # LOCK again
             if RASPBERRY_PI:
@@ -172,9 +173,9 @@ class AutoDoorController:
             print("🔴 ACCESS DENIED\n")
         
         print("📱 Ready for next QR code...")
-    
+    """
     def monitor_switch(self):
-        """Monitor GPIO 23 switch for manual door opening"""
+        
         if not RASPBERRY_PI:
             return
         
@@ -197,7 +198,7 @@ class AutoDoorController:
                 
             except Exception as e:
                 print(f"Switch error: {e}")
-                time.sleep(1)
+                time.sleep(1)"""
     
     def auto_input_monitor(self):
         """Monitor terminal input automatically"""
@@ -230,8 +231,9 @@ class AutoDoorController:
         try:
             # Start switch monitor in background thread
             if RASPBERRY_PI:
-                switch_thread = threading.Thread(target=self.monitor_switch, daemon=True)
-                switch_thread.start()
+                #switch_thread = threading.Thread(target=self.monitor_switch, daemon=True)
+                #switch_thread.start()
+                pass
             
             # Start input monitor
             self.auto_input_monitor()

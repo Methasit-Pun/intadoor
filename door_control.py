@@ -56,8 +56,8 @@ class DoorController:
         try:
             GPIO.cleanup()  # Clean up any previous GPIO usage
             GPIO.setmode(GPIO.BCM)  # Use BCM pin numbering (GPIO17)
-            GPIO.setup(self.RELAY_PIN, GPIO.OUT, initial=GPIO.HIGH)  # Door locked (relay ON)
-            logger.info(f"GPIO initialized - Relay pin {self.RELAY_PIN} set to HIGH (door locked)")
+            GPIO.setup(self.RELAY_PIN, GPIO.OUT, initial=GPIO.LOW)  # Door locked (relay ON)
+            logger.info(f"GPIO initialized - Relay pin {self.RELAY_PIN} set to LOW (door locked)")
         except Exception as e:
             logger.error(f"Failed to setup GPIO: {e}")
             raise
@@ -114,13 +114,13 @@ class DoorController:
         """Open the door by deactivating the relay (unlock)"""
         try:
             logger.info("Unlocking door...")
-            GPIO.output(self.RELAY_PIN, GPIO.LOW)  # Deactivate relay (unlock door)
+            GPIO.output(self.RELAY_PIN, GPIO.HIGH)  # Deactivate relay (unlock door)
             
             # Keep door unlocked for specified duration
             time.sleep(self.door_open_duration)
             
             # Lock door again
-            GPIO.output(self.RELAY_PIN, GPIO.HIGH)  # Activate relay (lock door)
+            GPIO.output(self.RELAY_PIN, GPIO.LOW)  # Activate relay (lock door)
             logger.info("Door locked again")
             
         except Exception as e:
@@ -243,7 +243,7 @@ class DoorController:
         """Clean up GPIO and other resources"""
         try:
             # Ensure door is locked before cleanup
-            GPIO.output(self.RELAY_PIN, GPIO.HIGH)  # Lock door
+            GPIO.output(self.RELAY_PIN, GPIO.LOW)  # Lock door
             GPIO.cleanup()
             logger.info("GPIO cleanup completed - Door secured")
         except Exception as e:
