@@ -5,7 +5,6 @@ SRC_DIR="~/Desktop/intadoor"
 
 rsync -avz --progress \
   --exclude '__pycache__' \
-  --exclude '.git' \
   --exclude 'venv' \
   "$REMOTE:$SRC_DIR/" \
   "$(dirname "$0")/"

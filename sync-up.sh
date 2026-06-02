@@ -5,7 +5,6 @@ DEST_DIR="~/Desktop/intadoor"
 
 rsync -avz --progress \
   --exclude '__pycache__' \
-  --exclude '.git' \
   --exclude 'venv' \
   --exclude '.env' \
   "$(dirname "$0")/" \
