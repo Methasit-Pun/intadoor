@@ -1,10 +1,10 @@
 #!/bin/bash
 # install_service.sh - Install cdc_v2.py as a systemd service
 
-SERVICE_NAME="intadoor"
+SERVICE_NAME="door-control"
 USER=$(whoami)
 WORKING_DIR=$(pwd)
-PYTHON_PATH=$(which python3)
+PYTHON_PATH="$WORKING_DIR/venv/bin/python3"
 
 echo "Creating systemd service for $SERVICE_NAME..."
 
