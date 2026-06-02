@@ -1,12 +1,17 @@
 #!/usr/bin/env python3
+<<<<<<< HEAD
 import os, time, sys
 import RPi.GPIO as GPIO
+=======
+import os, time, sys, RPi.GPIO as GPIO
+>>>>>>> a0474e6 (feat: add cdc lastest code)
 from supabase import create_client
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
 
 load_dotenv()
 
+<<<<<<< HEAD
 # ── Hardware ──────────────────────────────────────────────────────────────────
 RELAY_PIN          = 17
 DOOR_OPEN_DURATION = 6          # seconds
@@ -39,10 +44,25 @@ if not SUPABASE_URL or not SUPABASE_KEY:
     sys.exit("❌ SUPABASE_URL / SUPABASE_ANON_KEY are not set in .env — aborting.")
 
 # ── GPIO setup ────────────────────────────────────────────────────────────────
+=======
+RELAY_PIN = 17
+DOOR_OPEN_DURATION = 6
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_ANON_KEY")
+TABLE_NAME = os.getenv("SUPABASE_TABLE", "reservations")
+ACCESS_LOG_TABLE = "access_logs"
+QR_COLUMN = "qr_code_url"
+EMERGENCY_CODES = [
+    "INR012509101700000201",
+    "INR012508300900000131"
+]
+
+>>>>>>> a0474e6 (feat: add cdc lastest code)
 GPIO.setwarnings(False)
 GPIO.setmode(GPIO.BCM)
 GPIO.setup(RELAY_PIN, GPIO.OUT, initial=GPIO.LOW)
 
+<<<<<<< HEAD
 # ── Supabase client ───────────────────────────────────────────────────────────
 def connect_supabase():
     try:
@@ -162,6 +182,58 @@ def log_access(code: str, success: bool):
     client = _get_supabase()
     if not client:
         return
+=======
+def connect_supabase():
+    try:
+        return create_client(SUPABASE_URL, SUPABASE_KEY)
+    except Exception as e:
+        print(f"❌ Supabase init error: {e}")
+        return None
+
+supabase = connect_supabase()
+print("🚪 Door control system started.\n")
+
+def safe_flush():
+    try:
+        sys.stdout.flush()
+    except:
+        pass
+
+def open_door():
+    try:
+        print("🔓 Door unlocked")
+        GPIO.output(RELAY_PIN, GPIO.HIGH)
+        safe_flush()
+        time.sleep(DOOR_OPEN_DURATION)
+        GPIO.output(RELAY_PIN, GPIO.LOW)
+        print("🔒 Door locked again")
+    except Exception as e:
+        print(f"⚠️ GPIO error: {e}")
+        GPIO.cleanup()
+        GPIO.setmode(GPIO.BCM)
+        GPIO.setup(RELAY_PIN, GPIO.OUT, initial=GPIO.LOW)
+
+def check_code(code):
+    global supabase
+    if not supabase:
+        supabase = connect_supabase()
+        if not supabase:
+            return False
+    try:
+        res = supabase.table(TABLE_NAME).select("*").eq(QR_COLUMN, code.strip()).execute()
+        return bool(res.data)
+    except Exception as e:
+        print(f"❌ Database error: {e}")
+        supabase = None
+        return False
+
+def log_access(code, success):
+    global supabase
+    if not supabase:
+        supabase = connect_supabase()
+        if not supabase:
+            return
+>>>>>>> a0474e6 (feat: add cdc lastest code)
     try:
         client.table(ACCESS_LOG_TABLE).insert({
             "qr_code_url": code,
@@ -171,6 +243,7 @@ def log_access(code: str, success: bool):
             "access_type": "door_entry",
         }).execute()
     except Exception as e:
+<<<<<<< HEAD
         print(f"⚠️ Log insert failed: {e}", flush=True)
 
 
@@ -186,6 +259,21 @@ try:
             continue
         except Exception as e:
             print(f"⚠️ Input error: {e}", flush=True)
+=======
+        print(f"⚠️ Log insert failed: {e}")
+
+last_action = time.time()
+try:
+    while True:
+        try:
+            code = input("Scan QR code (or type 'quit' to exit): ").strip()
+        except EOFError:
+            print("⚠️ Input stream closed, restarting...")
+            time.sleep(2)
+            continue
+        except Exception as e:
+            print(f"⚠️ Input error: {e}")
+>>>>>>> a0474e6 (feat: add cdc lastest code)
             time.sleep(2)
             continue
 
@@ -196,20 +284,35 @@ try:
             print("⚠️ Empty input, try again.", flush=True)
             continue
 
+<<<<<<< HEAD
         print("🔍 Checking code...", flush=True)
         authorized = code in EMERGENCY_CODES or check_code(code)
         if authorized:
             print("✅ Access granted", flush=True)
+=======
+        print("🔍 Checking code...")
+        safe_flush()
+        authorized = code in EMERGENCY_CODES or check_code(code)
+        if authorized:
+            print("✅ Access granted")
+>>>>>>> a0474e6 (feat: add cdc lastest code)
             open_door()
             log_access(code, True)
         else:
             print("❌ Access denied", flush=True)
             log_access(code, False)
 
+<<<<<<< HEAD
         # Periodic Supabase client refresh
         if time.time() - last_reconnect >= RECONNECT_INTERVAL:
             supabase = connect_supabase()
             last_reconnect = time.time()
+=======
+        # Auto-refresh supabase every hour
+        if time.time() - last_action > 3600:
+            supabase = connect_supabase()
+            last_action = time.time()
+>>>>>>> a0474e6 (feat: add cdc lastest code)
 
 except KeyboardInterrupt:
     print("\n🛑 System stopped by user", flush=True)
