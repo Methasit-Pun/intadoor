@@ -25,6 +25,9 @@ User=$USER
 WantedBy=multi-user.target
 EOF
 
+echo "Adding $USER to the 'input' group for hardware scanner access..."
+sudo usermod -a -G input $USER
+
 echo "Reloading systemd daemon..."
 sudo systemctl daemon-reload
 

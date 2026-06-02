@@ -32,6 +32,141 @@ except ImportError:
 from supabase import create_client, Client
 from dotenv import load_dotenv
 
+try:
+    import evdev
+except ImportError:
+    evdev = None
+    print("WARNING: evdev library not found. Hardware scanner will not function. Run: pip install evdev")
+
+# Standard US Keyboard Mapping for alphanumeric QR codes
+SCANCODES = {
+    2: ('1', '!'), 3: ('2', '@'), 4: ('3', '#'), 5: ('4', '$'),
+    6: ('5', '%'), 7: ('6', '^'), 8: ('7', '&'), 9: ('8', '*'),
+    10: ('9', '('), 11: ('0', ')'), 12: ('-', '_'), 13: ('=', '+'),
+    16: ('q', 'Q'), 17: ('w', 'W'), 18: ('e', 'E'), 19: ('r', 'R'),
+    20: ('t', 'T'), 21: ('y', 'Y'), 22: ('u', 'U'), 23: ('i', 'I'),
+    24: ('o', 'O'), 25: ('p', 'P'), 26: ('[', '{'), 27: (']', '}'),
+    30: ('a', 'A'), 31: ('s', 'S'), 32: ('d', 'D'), 33: ('f', 'F'),
+    34: ('g', 'G'), 35: ('h', 'H'), 36: ('j', 'J'), 37: ('k', 'K'),
+    38: ('l', 'L'), 39: (';', ':'), 40: ("'", '"'),
+    44: ('z', 'Z'), 45: ('x', 'X'), 46: ('c', 'C'), 47: ('v', 'V'),
+    48: ('b', 'B'), 49: ('n', 'N'), 50: ('m', 'M'), 51: (',', '<'),
+    52: ('.', '>'), 53: ('/', '?'), 57: (' ', ' ')
+}
+
+class HardwareScanner(threading.Thread):
+    def __init__(self, callback, device_name="YuRiot ScanCode Box"):
+        """
+        Background listener for a specific USB HID input device.
+        :param callback: Function to call when an ENTER scancode completes a string.
+        :param device_name: Exact or partial name of the device in /dev/input
+        """
+        super().__init__(daemon=True)
+        self.callback = callback
+        self.device_name = device_name
+        self.device = None
+        self._stop_event = threading.Event()
+        self.buffer = []
+        self.shift_pressed = False
+
+    def find_device(self):
+        if not evdev:
+            return None
+        try:
+            devices = [evdev.InputDevice(path) for path in evdev.list_devices()]
+            for dev in devices:
+                if self.device_name in dev.name:
+                    return dev
+            return None
+        except PermissionError:
+            logger.error("Permission denied to read /dev/input/. User must be root or in the 'input' group.")
+            logger.error("Run: sudo usermod -a -G input $USER && newgrp input")
+            time.sleep(10) # Prevent rapid spam
+            return None
+        except Exception as e:
+            logger.error(f"Error scanning devices: {e}")
+            return None
+
+    def cleanup_device(self):
+        if self.device:
+            try:
+                self.device.ungrab()
+                logger.info(f"Released exclusive grab on {self.device.name}")
+            except Exception:
+                pass
+            try:
+                self.device.close()
+            except Exception:
+                pass
+            self.device = None
+
+    def run(self):
+        if not evdev:
+            logger.warning("evdev module is missing. Scanner thread terminating.")
+            return
+
+        logger.info(f"Hardware scanner thread started, looking for '{self.device_name}'...")
+
+        while not self._stop_event.is_set():
+            if self.device is None:
+                self.device = self.find_device()
+                if self.device is None:
+                    time.sleep(2)  # Retry connection
+                    continue
+                
+                try:
+                    self.device.grab()  # EXCLUSIVE INTERCEPTION
+                    logger.info(f"SUCCESS: Exclusively grabbed device: {self.device.name} at {self.device.path}")
+                    self.buffer = [] # Clear buffer on connect
+                except IOError as e:
+                    logger.error(f"Failed to grab device {self.device.name} (Is it already grabbed?): {e}")
+                    self.device = None
+                    time.sleep(2)
+                    continue
+
+            try:
+                # Read hardware events bypassing OS keyboard buffers
+                for event in self.device.read_loop():
+                    if self._stop_event.is_set():
+                        break
+
+                    if event.type == evdev.ecodes.EV_KEY:
+                        key_event = evdev.categorize(event)
+                        
+                        # Monitor Shift Keys state
+                        if key_event.scancode in [evdev.ecodes.KEY_LEFTSHIFT, evdev.ecodes.KEY_RIGHTSHIFT]:
+                            if key_event.keystate == key_event.key_down:
+                                self.shift_pressed = True
+                            elif key_event.keystate == key_event.key_up:
+                                self.shift_pressed = False
+                            continue
+
+                        # Process Key Down events
+                        if key_event.keystate == key_event.key_down:
+                            if key_event.scancode == evdev.ecodes.KEY_ENTER:
+                                # Trigger callback and clear buffer
+                                final_string = "".join(self.buffer)
+                                logger.info(f"Scanned sequence captured: {final_string}")
+                                if final_string:
+                                    try:
+                                        self.callback(final_string)
+                                    except Exception as e:
+                                        logger.error(f"Callback error: {e}")
+                                self.buffer = []
+                            elif key_event.scancode in SCANCODES:
+                                # Append mapped character
+                                char_tuple = SCANCODES[key_event.scancode]
+                                char = char_tuple[1] if self.shift_pressed else char_tuple[0]
+                                self.buffer.append(char)
+                                
+            except (IOError, evdev.device.EvdevError) as e:
+                logger.warning(f"Device disconnected or read error: {e}")
+                self.cleanup_device()
+
+    def stop(self):
+        self._stop_event.set()
+        self.cleanup_device()
+
 # Load environment variables
 load_dotenv()
 
@@ -66,6 +201,10 @@ class DoorController:
         # State
         self.is_manually_open = False
         self.lock = threading.Lock()
+
+        # Initialize Hardware Scanner
+        self.scanner = HardwareScanner(callback=self.process_qr_scan)
+        self.scanner.start()
 
         # Initialize components
         self._setup_gpio()

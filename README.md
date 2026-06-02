@@ -1,4 +1,4 @@
-# IntaDoor v2
+# IntaDoor
 
 Raspberry Pi Door Control System with Web Interface and Local Authorization.
 
@@ -6,7 +6,7 @@ Raspberry Pi Door Control System with Web Interface and Local Authorization.
 
 1. **Install Dependencies**:
    ```bash
-   pip install flask python-dotenv supabase
+   pip install flask python-dotenv supabase evdev
    ```
 2. **Sync to Pi**:
    ```bash
@@ -28,7 +28,7 @@ Raspberry Pi Door Control System with Web Interface and Local Authorization.
 ## Usage
 
 - **Web Interface**: Open `http://<pi-ip-address>:9999`
-- **Features**: 
+- **Features**:
   - Gigantic **OPEN DOOR** button (timed).
   - **Manual Stay Open** toggle.
   - **Simulate QR Scan** field for non-keyboard input.
