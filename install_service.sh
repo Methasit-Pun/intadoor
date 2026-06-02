@@ -1,5 +1,5 @@
 #!/bin/bash
-# install_service.sh - Install cdc_v2.py as a systemd service
+# install_service.sh - Install cdc.py as a systemd service
 
 SERVICE_NAME="door-control"
 USER=$(whoami)
@@ -10,11 +10,11 @@ echo "Creating systemd service for $SERVICE_NAME..."
 
 sudo bash -c "cat > /etc/systemd/system/$SERVICE_NAME.service" <<EOF
 [Unit]
-Description=IntaDoor Control System v2
+Description=IntaDoor Control System
 After=network.target
 
 [Service]
-ExecStart=$PYTHON_PATH $WORKING_DIR/cdc_v2.py
+ExecStart=$PYTHON_PATH $WORKING_DIR/cdc.py
 WorkingDirectory=$WORKING_DIR
 StandardOutput=inherit
 StandardError=inherit
